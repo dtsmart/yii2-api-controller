@@ -1,0 +1,30 @@
+{
+    "name": "dtsmart/yii2-api-controller",
+    "description": "Yii2 Api Base Controller",
+    "keywords": ["yii2", "extension", "api", "controller"],
+    "license": "MIT",
+    "minimum-stability" : "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "Dtsmart\\yii\\api\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Toan Nguyen",
+            "email": "toan.nguyen@dtsmart.vn"
+        }
+    ],
+    "require": {
+        "php": ">=8.0",
+        "yidas/yii2-composer-bower-skip": "~2.0.13",
+        "yiisoft/yii2": "~2.0.46"
+    },
+    "config": {
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true,
+            "yiisoft/yii2-composer": true
+        }
+    }
+}

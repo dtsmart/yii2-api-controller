@@ -1,7 +1,8 @@
 <?php
 
-namespace Dtsmart\yii\api\override;
+namespace app\controllers;
 use yii\base\Action;
+use yii\base\InlineAction;
 use yii\base\InvalidRouteException;
 use yii\base\Model;
 use yii\helpers\Json;
@@ -11,6 +12,7 @@ use yii\web\BadRequestHttpException;
 use yii\web\HttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
+use yii\web\ServerErrorHttpException;
 
 class BaseController extends Controller
 {
@@ -33,28 +35,62 @@ class BaseController extends Controller
     }
 
     /**
-     * @param Action $action
-     * @param array $params
-     * @return array
-     * @throws \yii\web\BadRequestHttpException
+     * Binds the parameters to the action.
+     * This method is invoked by [[\yii\base\Action]] when it begins to run with the given parameters.
+     * This method will check the parameter names that the action requires and return
+     * the provided parameters according to the requirement. If there is any missing parameter,
+     * an exception will be thrown.
+     * @param \yii\base\Action $action the action to be bound with parameters
+     * @param array $params the parameters to be bound to the action
+     * @return array the valid parameters that the action can run with.
+     * @throws BadRequestHttpException if there are missing or invalid parameters.
      */
     public function bindActionParams($action, $params)
     {
-        $reflectionMethod = new \ReflectionMethod(static::class, $action->actionMethod);
+
+        if ($action instanceof InlineAction) {
+            $reflectionMethod = new \ReflectionMethod($this, $action->actionMethod);
+        } else {
+            $reflectionMethod = new \ReflectionMethod($action, 'run');
+        }
+
         $reflectionParameters = $reflectionMethod->getParameters();
+
         if (!empty($reflectionParameters)) {
             $reflectionParameter = $reflectionParameters[0];
-            $requestClass = $reflectionParameter->getType()->getName();
-            if (class_exists($requestClass)) {
-                /** @var Model $request */
-                $request = new $requestClass();
-                $data = Json::decode(\Yii::$app->getRequest()->getRawBody());
-                $request->load($data, 'data');
-                if (!$request->validate()) {
-                    $this->errorContext = $request->getErrors();
-                    throw new BadRequestHttpException('Bad request');
+
+            if (
+                PHP_VERSION_ID >= 80000
+                && ($type = $reflectionParameter->getType()) !== null
+                && !$type->allowsNull()
+            )
+            {
+
+
+                $typeName = PHP_VERSION_ID >= 70100 ? $type->getName() : (string)$type;
+                // Check
+                $requestClass = $typeName;
+                if(class_exists($requestClass) &&
+                    $typeName != 'int' &&
+                    $typeName != 'float' &&
+                    $typeName != 'bool'
+                )
+                {
+                    // Allow only one Request Type Model param
+                    if(count($reflectionParameters) > 1)
+                    {
+                        throw new ServerErrorHttpException('Only allow one Request Model param type');
+                    }
+                    /** @var Model $request */
+                    $request = new $requestClass();
+                    $data = Json::decode(\Yii::$app->getRequest()->getRawBody());
+                    $request->load($data, '');
+                    if (!$request->validate()) {
+                        $this->errorContext = $request->getErrors();
+                        throw new BadRequestHttpException('Bad request');
+                    }
+                    $params = [$reflectionParameter->getName() => $request];
                 }
-                $params = [$reflectionParameter->getName() => $request];
             }
         }
 
@@ -100,18 +136,18 @@ class BaseController extends Controller
      * @param array $data
      * @return array
      */
-    protected function success(array $data)
+    protected function success(mixed $data)
     {
-        return $this->pack($data, 'success');
+        return $this->pack($data, 'OK');
     }
 
     /**
      * @param array $data
      * @return array
      */
-    protected function error(array $data)
+    protected function error(mixed $data)
     {
-        return $this->pack($data, 'error');
+        return $this->pack($data, 'FAIL');
     }
 
     /**
@@ -135,9 +171,9 @@ class BaseController extends Controller
      */
     protected function pack($data, $status) {
         return [
-            'request-id' =>  \Yii::$app->request->getHeaders()->get('X-Request-Id'),
-            'status-code' => \Yii::$app->response->statusCode,
-            'status-text' => \Yii::$app->response->statusText,
+            'request_id' =>  \Yii::$app->request->getHeaders()->get('X-Request-Id'),
+            'code' => \Yii::$app->response->statusCode,
+            'message' => \Yii::$app->response->statusText,
             'status' => $status,
             'data' => $data
         ];
